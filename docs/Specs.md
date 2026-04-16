@@ -774,7 +774,7 @@ Neste painel deve haver botões para:
   - uma vez que o período de chuva encerra, a série de chuva original é retomada, e o cenário é persistido como o estado atual, em tempo real simulado, da barragem
 
 - **simular período de seca** (selecionar período sem chover)
-  - o sensor de chuva começar a captar a diminuição de chuva repentina
+  - o sensor_chuva_01 é fixado em 0mm/h durante todo o período selecionado, sobrepondo a série de chuva gerada
   - os volumes dos tanques começam a variar
   - uma vez que os volumes dos tanques atingem um estado de risco, um sinal de alerta é enviado para o painel de monitoramento, habilitando o botão de ajuste das comportas
   - a simulação da barragem e do período de seca são pausados até o botão de ajuste ser clicado
@@ -795,15 +795,16 @@ Efeito:
 - ao fim do período, a série de chuva original é retomada
 
 ### Simulação 2:
-Dias de seca — reduz o volume de chuva para 0mm/h durante o tempo de simulação  
+Dias de seca — fixa o sensor_chuva_01 em 0mm/h durante o período selecionado, sobrepondo a série de chuva gerada  
 Tempo de Duração:
 - 15 dias
 - 30 dias
 - 60 dias
 
 Efeito:
-- reduz o volume de chuva registrada pelo sensor_chuva_01
-- reduz chuva acumulada no mês
+- sensor_chuva_01 fixado em 0mm/h durante o período
+- sensor_chuva_02 (acumulado) cai progressivamente, reduzindo a capacidade_atual do sensor_enchimento_01
+- ao fim do período, a série de chuva original é retomada
 
 ---
 

@@ -72,7 +72,12 @@ O plano de 8 fases cobre bem as responsabilidades de cada camada. Três lacunas 
 
 ### 3b — Geração de série de chuva
 
-- [ ] **3.4** Criar `simulation-engine/src/rain.py`: função `generate_rain_series() -> list[float]` que gera 52 tendências semanais aleatórias (distribuição uniforme 0–50 mm/h ou similar) e as expande para 364 valores diários com interpolação suave entre semanas
+- [ ] **3.4** Criar `simulation-engine/src/rain.py`: função `generate_rain_series() -> list[float]` que para cada uma das 52 semanas sorteia aleatoriamente uma das 4 tendências e gera 7 valores diários conforme as regras de cada tendência:
+  - `sem_chuva`: cada dia tem 80% de chance de 0 mm/h e 20% de chance de exatamente 1 mm/h
+  - `pouca_chuva`: cada dia gera valor aleatório uniforme entre 1–5 mm/h
+  - `chuva_constante`: cada dia gera valor aleatório uniforme entre 5–10 mm/h
+  - `chuvas_intensas`: cada dia gera valor aleatório uniforme entre 10–50 mm/h
+  - Retorna lista de exatamente 364 floats (52 × 7)
 - [ ] **3.5** Escrever teste unitário para `generate_rain_series`: verificar que retorna exatamente 364 valores, todos ≥ 0
 
 ### 3c — Pipeline de sensores
@@ -85,9 +90,9 @@ O plano de 8 fases cobre bem as responsabilidades de cada camada. Três lacunas 
   5. `sensor_fluxo_01 = (comporta_02 / 100) × 200`
   6. `sensor_fluxo_02 = min((comporta_03 / 100) × 200, sensor_fluxo_01)`
   7. `sensor_esvaziamento_01 = (comporta_04 / 100) × 200`
-  8. `sensor_turbina_01 = sensor_fluxo_02`; `sensor_energia_01 = sensor_turbina_01 × 0.5`
-  9. `taxa_liquida_v1 = sensor_enchimento_01 − sensor_fluxo_01`; `delta_v1 = taxa_liquida_v1 × 1`; `sensor_volume_01 = clamp(sensor_volume_01 + delta_v1 / 100, 0, 100)`
-  10. `taxa_liquida_v2 = sensor_fluxo_02 − sensor_esvaziamento_01`; `delta_v2 = taxa_liquida_v2 × 1`; `sensor_volume_02 = clamp(sensor_volume_02 + delta_v2 / 100, 0, 100)`
+  8. `sensor_turbina_01 = "LIGADO" if sensor_comporta_02 > 0 and sensor_comporta_03 > 0 else "DESLIGADO"`; `sensor_energia_01 = sensor_fluxo_01 × 50 if sensor_turbina_01 == "LIGADO" else 0`
+  9. `contribuicao_chuva = sensor_chuva_01`; `taxa_liquida_v1 = sensor_enchimento_01 + contribuicao_chuva − sensor_fluxo_01`; `delta_v1 = taxa_liquida_v1 × 1`; `sensor_volume_01 = clamp(sensor_volume_01 + delta_v1 / 100, 0, 100)`
+  10. `taxa_liquida_v2 = sensor_fluxo_02 + contribuicao_chuva − sensor_esvaziamento_01`; `delta_v2 = taxa_liquida_v2 × 1`; `sensor_volume_02 = clamp(sensor_volume_02 + delta_v2 / 100, 0, 100)`
 - [ ] **3.7** Escrever testes unitários para `compute_tick`: (a) com comportas todas em 0% — volumes não mudam; (b) com enchimento > fluxo — volume_01 sobe; (c) volume em 100% com entrada positiva — permanece em 100% (clamp)
 
 ### 3d — Startup e cenários
@@ -161,30 +166,30 @@ O plano de 8 fases cobre bem as responsabilidades de cada camada. Três lacunas 
 
 ### 5a — Motor de riscos
 
-- [ ] **5.1** Criar `backend-api/src/risk_engine.py`: função `evaluate_risks(sensors: dict) -> list[RiskAlert]` que avalia as 10 regras da Seção 6:
-  - Risco 1: `sensor_volume_01 ≥ 90%` → LARANJA
-  - Risco 2: `sensor_volume_01 ≥ 95%` → VERMELHO
-  - Risco 3: `sensor_volume_02 ≥ 90%` → LARANJA
-  - Risco 4: `sensor_volume_02 ≥ 95%` → VERMELHO
-  - Risco 5: `sensor_volume_01 ≤ 10%` → AMARELO
-  - Risco 6: `sensor_volume_02 ≤ 10%` → AMARELO
-  - Risco 7: `contribuição_chuva ≥ 80%` da capacidade → LARANJA
-  - Risco 8: `sensor_fluxo_02 = 0` e `sensor_volume_02 > 0` → AMARELO (turbina parada com água disponível)
-  - Risco 9: `sensor_energia_01 < limiar` → AMARELO
-  - Risco 10: `sensor_volume_01 = 100%` e `sensor_enchimento_01 > 0` → VERMELHO (overflow iminente)
-- [ ] **5.2** Criar `backend-api/src/risk_models.py`: dataclass `RiskAlert` com campos `codigo` (str), `severidade` (str: VERDE/AMARELO/LARANJA/VERMELHO), `mensagem` (str), `sensores_envolvidos` (list)
-- [ ] **5.3** Implementar `aggregate_alert_level(alerts: list[RiskAlert]) -> str`: retorna o nível mais severo; se nenhum alerta, retorna VERDE
+- [ ] **5.1** Criar `backend-api/src/risk_engine.py`: função `evaluate_risks(sensors: dict) -> list[RiskAlert]` que avalia as 10 regras da Seção 6 das Specs:
+  - `RISCO_01` (ALTA): `sensor_volume_01 > 90%` E `(sensor_enchimento_01 + contribuicao_chuva) > sensor_fluxo_01`
+  - `RISCO_02` (MEDIA): `sensor_volume_01 < 20%` E `sensor_fluxo_01 > sensor_enchimento_01`
+  - `RISCO_03` (BAIXA): `sensor_volume_01 < 20%` E `sensor_enchimento_01 = 0` E `sensor_comporta_01 = 0%`
+  - `RISCO_04` (ALTA): `sensor_volume_02 > 90%` E `sensor_fluxo_02 > sensor_esvaziamento_01`
+  - `RISCO_05` (MEDIA): `sensor_volume_02 < 20%` E `sensor_esvaziamento_01 > sensor_fluxo_02`
+  - `RISCO_06` (MEDIA): `sensor_comporta_02 ≠ sensor_comporta_03`
+  - `RISCO_07` (CRITICA): `sensor_comporta_02 > sensor_comporta_03`
+  - `RISCO_08` (ALTA): `sensor_turbina_01 = "DESLIGADO"` E `sensor_comporta_02 > 0%` E `sensor_comporta_03 > 0%`
+  - `RISCO_09` (CRITICA): `sensor_turbina_01 = "LIGADO"` E `sensor_fluxo_01 = 0`
+  - `RISCO_10` (BAIXA): `|sensor_volume_01 − sensor_volume_02| ≥ 20%`
+- [ ] **5.2** Criar `backend-api/src/risk_models.py`: dataclass `RiskAlert` com campos `codigo` (str: `RISCO_01`…`RISCO_10`), `severidade` (str: `RiskSeverity` — `BAIXA` / `MEDIA` / `ALTA` / `CRITICA`), `mensagem` (str), `sensores` (dict: sensor_id → valor float)
+- [ ] **5.3** Implementar `aggregate_alert_level(alerts: list[RiskAlert]) -> str`: conta riscos ativos — 0 → `"VERDE"`, 1 → `"AMARELO"`, 2 → `"LARANJA"`, 3+ → `"VERMELHO"`
 - [ ] **5.4** Implementar geração de mensagens conforme Seção 7: template por código de risco com valores interpolados dos sensores
 - [ ] **5.5** Escrever testes unitários para `evaluate_risks`: um caso por regra, incluindo casos de borda (exatamente no limiar vs. 1 unidade abaixo)
 
 ### 5b — Mecanismo de previsão
 
 - [ ] **5.6** Criar `backend-api/src/prediction.py`: função `compute_predictions(sensors: dict) -> list[Prediction]`:
-  - Para tanque 1: `taxa_liquida_v1 = sensor_enchimento_01 − sensor_fluxo_01`
-    - Se `> 0`: `tempo_overflow = (100 − volume_01) × 100 / taxa_liquida_v1` horas
-    - Se `< 0`: `tempo_vazio = volume_01 × 100 / abs(taxa_liquida_v1)` horas
-  - Para tanque 2: análogo com `taxa_liquida_v2 = sensor_fluxo_02 − sensor_esvaziamento_01`
-  - Classificar: `tempo < 24h` → CRÍTICO; `24h ≤ tempo < 48h` → ALERTA
+  - Para tanque 1: `taxa_liquida_v1 = sensor_enchimento_01 + contribuicao_chuva − sensor_fluxo_01`
+    - Se `> 0` (enchendo): `tempo_overflow = (100 − volume_01) × 100 / taxa_liquida_v1` horas
+    - Se `< 0` (esvaziando): `tempo_vazio = volume_01 × 100 / abs(taxa_liquida_v1)` horas
+  - Para tanque 2: `taxa_liquida_v2 = sensor_fluxo_02 + contribuicao_chuva − sensor_esvaziamento_01`; mesma lógica de overflow/vazio
+  - Classificar: `tempo < 24h` → `"CRITICO"` (pausa engine); `24h ≤ tempo < 48h` → `"ALERTA"`; taxa = 0 → sem previsão
 - [ ] **5.7** Criar `backend-api/src/prediction_models.py`: dataclass `Prediction` com `tanque`, `tipo` (overflow/vazio), `tempo_horas` (float), `severidade` (ALERTA/CRÍTICO)
 - [ ] **5.8** No `display_tick`: se alguma previsão for CRÍTICO, fazer POST para `{ENGINE_URL}/engine/pause` e salvar alerta em `alert_history`
 - [ ] **5.9** Escrever testes unitários para `compute_predictions`: (a) taxa positiva com volume em 50% → tempo correto; (b) taxa zero → sem previsão; (c) tempo < 24h → CRÍTICO
@@ -227,7 +232,7 @@ O plano de 8 fases cobre bem as responsabilidades de cada camada. Três lacunas 
 ### 6d — Cards de sensores
 
 - [ ] **6.7** Criar `src/components/SensorCard.tsx`: props `label`, `value`, `unit`, `highlight` (bool para cor de fundo); exibir valor com 2 casas decimais e unidade
-- [ ] **6.8** Criar `src/components/SensorGrid.tsx`: grid responsivo com um `SensorCard` por sensor (13 sensores); destacar sensores envolvidos em riscos ativos
+- [ ] **6.8** Criar `src/components/SensorGrid.tsx`: grid responsivo com um `SensorCard` por sensor (14 sensores); destacar sensores envolvidos em riscos ativos
 
 ### 6e — Indicador de alerta e lista de riscos
 
