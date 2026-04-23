@@ -6,16 +6,6 @@
 
 ---
 
-## Avaliação do Plano Original
-
-O plano de 8 fases cobre bem as responsabilidades de cada camada. Três lacunas foram identificadas e incorporadas nas tarefas abaixo:
-
-1. **Comunicação bidirecional Engine ↔ API**: o plano original descreve apenas `POST /internal/tick` (engine → api). A API também precisa comandar o engine (pause, resume, speed, scenario, adjust). O engine precisa expor sua própria API HTTP interna (`/engine/*`).
-2. **Cache de estado em memória no Backend**: o loop de display lê o estado mais recente entregue pelo engine via `/internal/tick`. Esse estado precisa ser mantido em um `state_cache` em memória — não relido do banco a cada tick.
-3. **Startup e cenários como lógica do engine**: as sequências de inicialização da barragem e os cenários de chuva/seca envolvem alterar comportas e gerar séries de chuva sobrescritas — isso é responsabilidade do simulation-engine, não do backend-api.
-
----
-
 ## Fase 1 — Infraestrutura
 
 ### 1a — Estrutura de diretórios
